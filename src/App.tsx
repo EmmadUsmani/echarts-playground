@@ -1,6 +1,17 @@
 import { useEffect, useRef } from "react"
 import { init, type EChartsType } from "echarts"
 
+type Datum = {
+  x: number
+  y: number
+}
+
+function interpolateY(currDatum: Datum, prevDatum: Datum, x: number) {
+  const slope = (currDatum.y - prevDatum.y) / (currDatum.x - prevDatum.x)
+  const intercept = currDatum.y - slope * currDatum.x
+  return slope * x + intercept
+}
+
 const DATA = [
   { x: 1, y: 1 },
   { x: 2, y: 2 },
@@ -21,15 +32,18 @@ for (let i = 1; i < DATA.length; i++) {
 const minX = Math.min(...DATA.map((datum) => datum.x))
 const maxX = Math.max(...DATA.map((datum) => datum.x))
 
-let dataIndex = 0
-const newData = []
-for (let i = minX; i <= maxX + minInterval; i += minInterval) {
+const newData = [DATA[0]]
+let dataIndex = 1
+for (let i = minX + minInterval; i <= maxX + minInterval; i += minInterval) {
+  const currDatum = DATA[dataIndex]
+  const prevDatum = DATA[dataIndex - 1]
+
   // keep "jumping" the minInterval, if we jump over a value in DATA we add it to newData
   if (i >= DATA[dataIndex].x) {
     newData.push({ x: i, y: DATA[dataIndex].y })
     dataIndex++
   } else {
-    newData.push({ x: i, y: 0 })
+    newData.push({ x: i, y: interpolateY(currDatum, prevDatum, i) })
   }
 }
 
@@ -46,7 +60,7 @@ const OPTION = {
   },
   series: [
     {
-      type: "bar",
+      type: "line",
       encode: {
         x: "x",
         y: "y",
