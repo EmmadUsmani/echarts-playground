@@ -1,15 +1,21 @@
 import { useEffect, useRef } from "react"
 import { init, type EChartsType } from "echarts"
+import { Decimal } from "decimal.js"
 
 type Datum = {
   x: number
   y: number
 }
 
-function interpolateY(currDatum: Datum, prevDatum: Datum, x: number) {
-  const slope = (currDatum.y - prevDatum.y) / (currDatum.x - prevDatum.x)
-  const intercept = currDatum.y - slope * currDatum.x
-  return slope * x + intercept
+function interpolateY(currDatum: Datum, prevDatum: Datum, x: Decimal) {
+  const x1 = new Decimal(prevDatum.x)
+  const x2 = new Decimal(currDatum.x)
+  const y1 = new Decimal(prevDatum.y)
+  const y2 = new Decimal(currDatum.y)
+
+  const slope = y2.minus(y1).div(x2.minus(x1))
+  const intercept = y2.minus(slope.times(x2))
+  return slope.times(x).plus(intercept)
 }
 
 const DATA = [
@@ -24,26 +30,42 @@ const DATA = [
   { x: 7, y: 9 },
 ]
 
-let minInterval = Infinity
+let minInterval = new Decimal(Infinity)
 for (let i = 1; i < DATA.length; i++) {
-  minInterval = Math.min(Math.abs(DATA[i].x - DATA[i - 1].x), minInterval)
+  minInterval = new Decimal(
+    Decimal.min(Decimal.abs(DATA[i].x - DATA[i - 1].x), minInterval)
+  )
 }
 
-const minX = Math.min(...DATA.map((datum) => datum.x))
-const maxX = Math.max(...DATA.map((datum) => datum.x))
+const minX = Decimal.min(...DATA.map((datum) => datum.x))
+const maxX = Decimal.max(...DATA.map((datum) => datum.x))
 
-const newData = [DATA[0]]
+const newData: { x: number; y: number; originalX: number | null }[] = [
+  { ...DATA[0], originalX: DATA[0].x },
+]
 let dataIndex = 1
-for (let i = minX + minInterval; i <= maxX + minInterval; i += minInterval) {
+for (
+  let i = Decimal.add(minX, minInterval);
+  i <= Decimal.add(maxX, minInterval);
+  i = Decimal.add(i, minInterval)
+) {
   const currDatum = DATA[dataIndex]
   const prevDatum = DATA[dataIndex - 1]
 
   // keep "jumping" the minInterval, if we jump over a value in DATA we add it to newData
-  if (i >= DATA[dataIndex].x) {
-    newData.push({ x: i, y: DATA[dataIndex].y })
+  if (i >= new Decimal(DATA[dataIndex].x)) {
+    newData.push({
+      x: i.toDecimalPlaces(5).toNumber(),
+      y: DATA[dataIndex].y,
+      originalX: currDatum.x,
+    })
     dataIndex++
   } else {
-    newData.push({ x: i, y: interpolateY(currDatum, prevDatum, i) })
+    newData.push({
+      x: i.toDecimalPlaces(5).toNumber(),
+      y: interpolateY(currDatum, prevDatum, i).toDecimalPlaces(5).toNumber(),
+      originalX: null,
+    })
   }
 }
 
@@ -64,6 +86,12 @@ const OPTION = {
       encode: {
         x: "x",
         y: "y",
+      },
+      symbol: (value) => {
+        if (value.originalX === null) {
+          return "none"
+        }
+        return "circle"
       },
     },
   ],
